@@ -1,7 +1,7 @@
 /**
  * 
  */
-package com.jriver.commons;
+package com.jriver.commons.tools;
 
 import java.util.List;
 

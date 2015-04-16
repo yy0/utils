@@ -1,4 +1,4 @@
-package com.jriver.commons;
+package com.jriver.commons.tools;
 
 import java.awt.BasicStroke;
 import java.awt.Graphics;

@@ -1,4 +1,4 @@
-package com.jriver.commons;
+package com.jriver.commons.tools;
 
 /**
  * murmur hash 2.0.

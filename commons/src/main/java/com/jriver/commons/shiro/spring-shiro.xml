@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd"
+       default-lazy-init="true">
+
+	<bean id="casFilter" class="org.apache.shiro.cas.CasFilter">
+		<!--配置验证错误时的失败页面（Ticket 校验不通过时展示的错误页面） -->
+		<property name="failureUrl" value="${shiro.failureUrl}" />
+	</bean>
+	<bean id="logoutFilter" class="org.apache.shiro.web.filter.authc.LogoutFilter">
+	    <property name="redirectUrl" value="${shiro.logoutUrl}"/>
+	</bean>
+	<bean id="formAuthenticationFilter" class="org.apache.shiro.web.filter.authc.FormAuthenticationFilter" />
+    <bean id="anonymousFilter" class="org.apache.shiro.web.filter.authc.AnonymousFilter" />
+	
+	<!-- Shiro Filter
+        anon:匿名过滤器，不用登录也可以访问
+        authc:如果继续操作,需要做对应的表单验证否则不能通过
+        authcBasic:基本http验证过滤，如果不通过，跳转登录页面
+        logout:登录退出过滤器
+        noSessionCreation:没有session创建过滤器
+        perms:权限过滤器
+        port:端口过滤器，可以设置是否是指定端口如果不是跳转到登录页面
+        rest:http方法过滤器，可以指定如post不能进行访问等
+        roles:	角色过滤器，判断当前用户是否指定角色
+        ssl:请求需要通过ssl，如果不是跳转回登录页
+        user:如果访问一个已知用户，比如记住我功能，走这个过滤器
+    -->
+	<bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+		<property name="securityManager" ref="securityManager" />
+
+		<!--没有单点登录下的配置：没有权限或者失败后跳转的页面 -->
+		<!--<property name="loginUrl" value="/login/toLoginAction"/> -->
+
+		<!--有单点登录的配置：登录 CAS 服务端地址，参数 service 为服务端的返回地址 -->
+		<property name="loginUrl" value="${shiro.loginUrl}" />
+		<!--<property name="successUrl" value="/page/index.jsp"/> -->
+		<property name="successUrl" value="${shiro.successUrl}" />
+
+		<property name="filters">  
+            <map>  
+                <entry key="authc" value-ref="formAuthenticationFilter" />  
+                <entry key="cas" value-ref="casFilter" />
+                <entry key="anon" value-ref="anonymousFilter" />
+                <entry key="logout" value-ref="logoutFilter" />
+            </map>  
+        </property>  
+        <property name="filterChainDefinitions">  
+            <value>
+                /shiro-cas = cas
+                /**/*.js = anon
+                /**/*.css = anon
+                /logout = logout
+                /** = authc
+            </value>  
+        </property>
+	</bean>
+
+	<bean id="casRealm" class="com.km.commons.shrio.realm.KMCASRealm">
+		<property name="defaultRoles" value="ROLE_USER" />
+		<property name="casServerUrlPrefix"
+			value="${shiro.casServerUrlPrefix}" />
+		<!--客户端的回调地址设置，必须和上面的shiro-cas过滤器拦截的地址一致 -->
+		<property name="casService"
+			value="${shiro.casService}" />
+	</bean>
+	
+	<!--Define the realm you want to use to connect to your back-end security 
+		datasource: -->
+	<bean id="casSubjectFactory" class="org.apache.shiro.cas.CasSubjectFactory" />
+		
+	 <!-- custom shiro session listener -->
+    <bean id="customSessionListener" class="com.km.commons.shrio.session.CustomSessionListener">
+        <property name="shiroSessionRepository" ref="jedisShiroSessionRepository"/>
+    </bean>
+
+    <!-- ...AUTHENTICATION INFO CACHE BEGIN... -->
+    <!-- custom sessionDAO,must use class impl CustomShiroSessionRepository interface -->
+    <bean id="customShiroSessionDAO" class="com.km.commons.shrio.session.CustomShiroSessionDAO">
+        <property name="shiroSessionRepository" ref="jedisShiroSessionRepository"/>
+    </bean>
+
+    <!-- custom save session by redis class impl ShiroSessionRepository interface -->
+    <bean id="jedisShiroSessionRepository" class="com.km.commons.shrio.session.JedisShiroSessionRepository">
+        <property name="shardedJedisPool" ref="shardedJedisPool"/>
+    </bean>
+    <!-- ...AUTHENTICATION INFO CACHE END... -->
+
+    <!-- ...AUTHORIZATION INFO CACHE BEGIN... -->
+    <!-- custom shiro authorization info cache manager class-->
+    <bean id="customShiroCacheManager" class="com.km.commons.shrio.cache.CustomShiroCacheManager">
+        <property name="shiroCacheManager" ref="jedisShiroCacheManager"/>
+    </bean>
+
+    <!-- shiro authorization info default cache is computer memory -->
+    <!--<bean id="memoryConstrainedCacheManager" class="org.apache.shiro.cache.MemoryConstrainedCacheManager"/>-->
+
+    <!-- ShiroCacheManager interface impl class by redis,save authorization info to redis -->
+    <bean id="jedisShiroCacheManager" class="com.km.commons.shrio.cache.JedisShiroCacheManager">
+        <property name="shardedJedisPool" ref="shardedJedisPool"/>
+    </bean>
+    <!-- ...AUTHORIZATION INFO CACHE END... -->
+
+    <!-- default web session manager，session expire time 20 minutes -->
+    <bean id="defaultWebSessionManager" class="org.apache.shiro.web.session.mgt.DefaultWebSessionManager">
+        <property name="globalSessionTimeout" value="${shiro.session.timeout}"/>
+        <property name="sessionDAO" ref="customShiroSessionDAO"/>
+        <property name="sessionIdCookie" ref="simpleCookie"/>
+        <property name="sessionListeners">
+            <list>
+                <ref local="customSessionListener"/>
+            </list>
+        </property>
+        <property name="sessionValidationScheduler" ref="sessionValidationScheduler"/>
+        <property name="sessionValidationSchedulerEnabled" value="true"/>
+        <property name="deleteInvalidSessions" value="true"/>
+    </bean>
+    
+    <bean id="simpleCookie" class="org.apache.shiro.web.servlet.SimpleCookie">
+        <constructor-arg index="0" value="JSESSIONID_COOKIE"/>
+        <property name="httpOnly" value="true"/>
+    </bean>
+    
+    <bean id="sessionValidationScheduler" class="org.apache.shiro.session.mgt.ExecutorServiceSessionValidationScheduler">
+        <property name="sessionManager" ref="defaultWebSessionManager"/>
+        <property name="interval" value="${shiro.session.validate.timespan}"/>
+    </bean>
+	
+	<!--
+       	 单机/集群配置说明:
+        1.如采用单机的shiro配置
+          securityManager的sessionManager属性不需要注入，shiro会使用默认的serlvet容器实现的sessionManager;
+          securityManager的cahceManager属性需要注入，shiro自带的本机内存缓存实现类memoryConstrainedCacheManager;
+        2.如果采用集群部署方案
+          securityManager的sessionManager属性需要注入，shiro自带的defaultWebSessionManager（web实现）;
+          securityManager的cahceManager属性需要注入，自己实现的cacheManager类customShiroCacheManager
+    -->
+    <!-- shiro's main business-tier object for web-enabled applications -->
+    <bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+        <property name="sessionManager" ref="defaultWebSessionManager"/>
+        <!--Single realm app. If you have multiple realms, use the 'realms' property instead. -->
+        <!-- <property name="realm" ref="casRealm" /> -->
+        <property name="realms">
+	        <list>
+	            <ref bean="casRealm"/>
+	        </list>
+	    </property>
+	    <property name="subjectFactory" ref="casSubjectFactory" />
+        <property name="cacheManager" ref="customShiroCacheManager"/>
+    </bean>
+
+	<!--保证实现了Shiro内部lifecycle函数的bean执行 -->
+	<bean id="lifecycleBeanPostProcessor" class="org.apache.shiro.spring.LifecycleBeanPostProcessor" />
+
+
+	<!--AOP式方法级权限检查 -->
+	<!--Enable Shiro Annotations for Spring-configured beans. Only run after -->
+	<!--the lifecycleBeanProcessor has run: -->
+	<bean class="org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator" depends-on="lifecycleBeanPostProcessor">
+		<property name="proxyTargetClass" value="true" />
+	</bean>
+	<bean class="org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor">
+		<property name="securityManager" ref="securityManager" />
+	</bean>
+
+</beans>
