@@ -1,0 +1,11 @@
+package com.jriver.test;
+
+/**
+ * Created by wujianjiang913 on 2016-11-03.
+ */
+public class JServiceClient {
+
+    public void invoke(Object o) {
+        System.out.println("JServiceClient.invoke: " + o.toString());
+    }
+}
